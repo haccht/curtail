@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/hpcloud/tail"
 )
@@ -17,10 +18,10 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		log.Fatal("Filepath must be specified.")
+		log.Fatal("Target file must be specified.")
 	}
 
-	filepath := flag.Arg(0)
+	filename := flag.Arg(0)
 	tailconf := tail.Config{
 		Follow:   true,
 		ReOpen:   true,
@@ -33,10 +34,12 @@ func main() {
 			return
 		}
 
-		q := r.URL.Query()
+		query := r.URL.Query()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
 
 		var rs []*regexp.Regexp
-		for _, v := range q["q"] {
+		for _, v := range query["q"] {
 			re, err := regexp.Compile(v)
 			if err != nil {
 				fmt.Fprintln(w, err)
@@ -45,22 +48,28 @@ func main() {
 			rs = append(rs, re)
 		}
 
-		t, err := tail.TailFile(filepath, tailconf)
+		t, err := tail.TailFile(filename, tailconf)
 		if err != nil {
 			fmt.Fprintln(w, err)
 			return
 		}
 
-		for line := range t.Lines {
-			matched := true
-			for _, re := range rs {
-				matched = matched && re.MatchString(line.Text)
-			}
-			if !matched {
-				continue
+		for {
+			select {
+			case line := <-t.Lines:
+				matched := true
+				for _, re := range rs {
+					matched = matched && re.MatchString(line.Text)
+				}
+				if !matched {
+					continue
+				}
+				fmt.Fprintln(w, line.Text)
+			case <-ticker.C:
+				// send NUL to keep the connection alive
+				fmt.Fprint(w, "\x00")
 			}
 
-			fmt.Fprintln(w, line.Text)
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
