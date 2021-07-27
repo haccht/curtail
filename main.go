@@ -16,7 +16,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "TCP address to listen on")
 	flag.Parse()
 
-	if flag.NArg() == 0 {
+	if flag.NArg() < 1 {
 		log.Fatal("Filepath must be specified.")
 	}
 
@@ -52,11 +52,11 @@ func main() {
 		}
 
 		for line := range t.Lines {
-			pass := true
+			matched := true
 			for _, re := range rs {
-				pass = pass && re.MatchString(line.Text)
+				matched = matched && re.MatchString(line.Text)
 			}
-			if !pass {
+			if !matched {
 				continue
 			}
 
