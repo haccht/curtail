@@ -21,7 +21,6 @@ func main() {
 		log.Fatal("Target file must be specified.")
 	}
 
-	filename := flag.Arg(0)
 	tailconf := tail.Config{
 		Follow:   true,
 		ReOpen:   true,
@@ -48,23 +47,37 @@ func main() {
 			rs = append(rs, re)
 		}
 
-		t, err := tail.TailFile(filename, tailconf)
-		if err != nil {
-			fmt.Fprintln(w, err)
-			return
+		lines := make(chan string)
+		for _, filepath := range flag.Args() {
+			go func(filepath string) {
+				t, err := tail.TailFile(filepath, tailconf)
+				if err != nil {
+					fmt.Fprintln(w, err)
+					return
+				}
+
+				for line := range t.Lines {
+					lines <- line.Text
+				}
+
+				err = t.Wait()
+				if err != nil {
+					fmt.Fprintln(w, err)
+				}
+			}(filepath)
 		}
 
 		for {
 			select {
-			case line := <-t.Lines:
+			case line := <-lines:
 				matched := true
 				for _, re := range rs {
-					matched = matched && re.MatchString(line.Text)
+					matched = matched && re.MatchString(line)
 				}
 				if !matched {
 					continue
 				}
-				fmt.Fprintln(w, line.Text)
+				fmt.Fprintln(w, line)
 			case <-ticker.C:
 				// send NUL to keep the connection alive
 				fmt.Fprint(w, "\x00")
@@ -73,11 +86,6 @@ func main() {
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
-		}
-
-		err = t.Wait()
-		if err != nil {
-			fmt.Fprintln(w, err)
 		}
 	})
 
