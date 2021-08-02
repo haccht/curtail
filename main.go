@@ -44,11 +44,11 @@ func serve(addr string, mux *http.ServeMux) error {
 }
 
 func tailFunc(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	if !strings.Contains(strings.ToLower(r.Header.Get("User-Agent")), "curl") {
 		return
 	}
 
-	query := r.URL.Query()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -112,7 +112,7 @@ func tailFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	addr := flag.String("addr", ":8080", "TCP address to listen on")
+	addr := flag.String("addr", ":8080", "Address to listen on")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
